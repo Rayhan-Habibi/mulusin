@@ -8,16 +8,26 @@
     "start": "next start"
   },
   "dependencies": {
+    "chart.js": "^4.5.1",
+    "daisyui": "^5.5.5",
+    "firebase": "^12.6.0",
+    "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
+    "lucide-react": "^0.554.0",
     "next": "16.0.3",
-    "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react": "^19.0.0-rc.1",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.0.0-rc.1",
+    "react-leaflet": "^5.0.0-rc.2"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/leaflet": "^1.9.21",
+    "@types/leaflet.heat": "^0.2.5",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.1.17",
     "typescript": "^5"
   }
 }
