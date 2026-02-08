@@ -1,13 +1,119 @@
 'use client';
 
 import { getReports, ReportData } from '@/services/reportService';
-import { AlertTriangle, Clock, MapPin } from 'lucide-react';
+import { AlertTriangle, Clock, Eye, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import PopUpJalan from '../../components/popupJalan';
 
 export default function LaporanKecelakaanPage() {
 
    const [reports, setReports] = useState<ReportData[]>([]);
    const [loading, setLoading] = useState(true);
+   const [selectedReport, setSelectedReport] = useState<any | null>(null)
+
+   const [filteredReports, setFilteredReports] = useState<any[]>([]); // Data HASIL FILTER untuk Tabel
+
+  // State untuk menyimpan nilai input Filter
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    damageType: 'all',
+    status: 'all'
+  });
+
+  // 2. FETCH DATA
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await getReports();
+        setReports(data);
+        
+        // Default: Tampilkan data yang BUKAN kecelakaan saat pertama load
+        const defaultData = data.filter((item) => {
+             const type = decodeURIComponent((item.damageType || "").replace(/\+/g, ' ')).toLowerCase();
+             return !type.includes('kecelakaan');
+        });
+        setFilteredReports(defaultData);
+
+      } catch (error) {
+        console.error("Gagal ambil data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // 3. LOGIC FILTERING
+  const applyFilter = () => {
+    // Mulai dari data asli
+    let result = [...reports];
+
+    // A. Filter Wajib: Buang data 'Kecelakaan'
+    result = result.filter((item) => {
+      const type = decodeURIComponent((item.damageType || "").replace(/\+/g, ' ')).toLowerCase();
+      return !type.includes('kecelakaan');
+    });
+
+    // B. Filter Tanggal
+    if (filters.startDate) {
+      const start = new Date(filters.startDate).setHours(0,0,0,0);
+      result = result.filter(item => {
+        if (!item.createdAt) return false;
+        const itemDate = new Date(item.createdAt.seconds * 1000).setHours(0,0,0,0);
+        return itemDate >= start;
+      });
+    }
+
+    if (filters.endDate) {
+      const end = new Date(filters.endDate).setHours(23,59,59,999);
+      result = result.filter(item => {
+        if (!item.createdAt) return false;
+        const itemDate = new Date(item.createdAt.seconds * 1000).setHours(0,0,0,0);
+        return itemDate <= end;
+      });
+    }
+
+    // C. Filter Status
+    if (filters.status !== 'all') {
+      result = result.filter(item => {
+        const s = (item.status || "").toUpperCase();
+        if (filters.status === 'menunggu') return s === 'PENDING';
+        if (filters.status === 'completed') return s === 'DISETUJUI' || s === 'DITOLAK'; 
+        return s === filters.status.toUpperCase(); // 'DISETUJUI' matches 'DISETUJUI'
+      });
+    }
+
+    // D. Filter Jenis Kerusakan
+    if (filters.damageType !== 'all') {
+        result = result.filter(item => {
+            const rawType = item.damageType || "";
+            const type = decodeURIComponent(rawType.replace(/\+/g, ' ')).toLowerCase();
+            return type.includes(filters.damageType.toLowerCase());
+        });
+    }
+
+    // Update tabel dengan hasil filter
+    setFilteredReports(result);
+  };
+
+  // Fungsi Reset Filter
+  const resetFilter = () => {
+    setFilters({ startDate: '', endDate: '', damageType: 'all', status: 'all' });
+    // Reset ke data awal (semua kecuali kecelakaan)
+    const defaultData = reports.filter((item) => {
+        const type = decodeURIComponent((item.damageType || "").replace(/\+/g, ' ')).toLowerCase();
+        return !type.includes('kecelakaan');
+    });
+    setFilteredReports(defaultData);
+  };
+
+  // Helper Handle Input Change
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
   
     // Fetch Data
     useEffect(() => {
@@ -108,8 +214,8 @@ export default function LaporanKecelakaanPage() {
                 <th className="py-4 pl-6">ID</th>
                 <th className='min-w-[200px]'>Waktu</th>
                 <th>Lokasi</th>
-                <th>Deskripsi</th>
-                <th className="pr-6 text-right">Severity</th>
+                <th className="min-w-[150px]" >Status</th>
+                <th className="pr-6 text-right">Aksi</th>
                 </tr>
             </thead>
             <tbody>
@@ -136,14 +242,18 @@ export default function LaporanKecelakaanPage() {
                                 </div>
                             </td>
 
-                            <td className="max-w-xs text-gray-600 truncate">
-                                {item.description || "Tidak ada deskripsi"}
-                            </td>
 
-                            <td className="pr-6 text-right">
-                                <span className={`badge ${getSeverityBadge(item.severity)} text-white font-medium py-3 px-4 border-0`}>
-                                    {item.severity || "Unknown"}
-                                </span>
+                                  <td>
+                            <div className={`badge text-white ${item.status === "DISETUJUI" ? "badge-success" : item.status === "DITOLAK" ? "badge-error" : "badge-warning"}`}>
+                              {item.status === "PENDING" ? "Menunggu" : item.status}
+                            </div>
+                              </td>
+                    
+
+                            <td>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedReport(item)}>
+                                <Eye size={18} /> Lihat Detail
+                              </button>
                             </td>
                         </tr>
                     ))
@@ -167,6 +277,31 @@ export default function LaporanKecelakaanPage() {
             </p>
         </div>
       </div>
+      {/* --- POPUP DETAIL LAPORAN --- */}
+      
+            <PopUpJalan 
+             isOpen={!!selectedReport}
+             onClose={() => setSelectedReport(null)}
+        
+        // SOLUSI: Mapping data secara manual di sini
+            data={selectedReport ? {
+              id: selectedReport.reportId, // Ubah reportId jadi id
+              location: selectedReport.address || "Lokasi tidak diketahui",
+              imageSrc: selectedReport.imageBase64 
+            ? `data:image/jpeg;base64,${selectedReport.imageBase64.replace(/\s/g, '')}` 
+            : "https://placehold.co/600x400?text=No+Image", // Gabung lat/lng jadi string location
+              totalReports: 1, // Hardcode atau ambil dari logika lain
+              lastUpdate: new Date().toLocaleDateString("id-ID"), // Format tanggal
+              severityScore: selectedReport.damageType 
+                            ? decodeURIComponent(selectedReport.damageType.replace(/\+/g, ' ')) 
+                            : "-", // Contoh logika skor
+              damageType: selectedReport.description || "Tidak diketahui",
+              aiConfidence: 85, // Mock data atau ambil dari field AI jika ada
+              aiSeverity: "High",// Mock logic
+              status: `${selectedReport.status}` // Sesuaikan dengan tipe literal di component ("Menunggu" | "Proses" | "Selesai")
+            } : null}
+      />
     </div>
+    
   );
 }
